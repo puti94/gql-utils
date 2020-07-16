@@ -1,0 +1,58 @@
+{
+  "name": "@puti94/gql-utils",
+  "version": "0.1.0",
+  "description": "graphql 工具",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/puti94/gql-utils"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+  "author": "puti94",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "license": "MIT",
+  "keywords": [
+    "graphql",
+    "utils",
+    "query"
+  ],
+  "scripts": {
+    "start": "node ./test/testServer.js",
+    "build": "tsc",
+    "test": "npm run build && mocha \"test/**/*.test.js\"",
+    "watch-ts": "tsc -w",
+    "lint": "tsc --noEmit && eslint \"**/*.{js,ts}\" --quiet --fix",
+    "debug": "npm run build && npm run watch-debug"
+  },
+  "dependencies": {
+    "lodash": "^4.17.15"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "src",
+    "img",
+    "LICENSE"
+  ],
+  "devDependencies": {
+    "@types/chai": "^4.2.11",
+    "@types/lodash": "^4.14.150",
+    "@types/mocha": "^7.0.2",
+    "@types/node": "^12.7.8",
+    "@types/validator": "^13.0.0",
+    "@typescript-eslint/eslint-plugin": "^2.3.1",
+    "@typescript-eslint/parser": "^2.3.1",
+    "apollo-server-express": "^2.14.0",
+    "chai": "^4.2.0",
+    "eslint": "^6.4.0",
+    "mocha": "^7.1.2",
+    "nodemon": "^1.19.2",
+    "supertest": "^4.0.2",
+    "ts-jest": "^24.1.0",
+    "ts-node": "^8.10.1",
+    "ts-node-dev": "^1.0.0-pre.44",
+    "typescript": "^3.6.3"
+  }
+}
