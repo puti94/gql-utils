@@ -1,7 +1,7 @@
 {
   "name": "@puti94/gql-utils",
-  "version": "0.1.0",
-  "description": "graphql 工具",
+  "version": "0.1.2",
+  "description": "graphql 请求文本生成工具",
   "repository": {
     "type": "git",
     "url": "https://github.com/puti94/gql-utils"
@@ -19,7 +19,6 @@
     "query"
   ],
   "scripts": {
-    "start": "node ./test/testServer.js",
     "build": "tsc",
     "test": "npm run build && mocha \"test/**/*.test.js\"",
     "watch-ts": "tsc -w",
@@ -33,7 +32,6 @@
     "dist",
     "README.md",
     "src",
-    "img",
     "LICENSE"
   ],
   "devDependencies": {
