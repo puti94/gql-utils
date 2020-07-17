@@ -2,7 +2,7 @@
  * graphql-adapter库的工具类
  * 地址 https://github.com/puti94/graphql-adapter
  */
-import {FieldsArgs, generateFieldsText, generateFieldText, FieldsListArgs, FieldConfig} from './generateText'
+import {FieldsArgs, FieldsListArgs, generateFieldsText} from './generateText'
 import upperFirst from 'lodash/upperFirst'
 
 import pick from 'lodash/pick'
@@ -116,15 +116,15 @@ function getField(field: FieldMetadata, key: string, parentName?: string) {
 
 
 /**
- * 扁平化参数
+ * 扁平化选项
  * @param metadata
  * @param config
  * @returns {any}
  */
-export function flattenFields<T extends TableFieldsMap>(metadata: T, config: FlattenConfig<T>): FieldMetadata[] {
+export function flattenFields<T extends TableFieldsMap>(metadata: T, config: FlattenConfig<T>): FieldMetadataMap {
     const {name, deep = 3, pickFields, mergeFields = {}} = config;
     const fieldsMap = metadata[name];
-    if (!fieldsMap) return []
+    if (!fieldsMap) return {}
 
     function flattenObj(name: keyof T, parentName?: string) {
         if (parentName && parentName.split('.').length >= deep) return;
@@ -151,7 +151,5 @@ export function flattenFields<T extends TableFieldsMap>(metadata: T, config: Fla
 
     const obj = flattenObj(name);
     const pickObj = pick(obj, pickFields);
-    const mergeObj = merge(pickObj, mergeFields);
-    return Object.values(mergeObj);
+    return merge(pickObj, mergeFields);
 }
-
