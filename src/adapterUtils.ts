@@ -69,7 +69,7 @@ export type FlattenConfig<T extends TableFieldsMap> = {
     /**
      * 抽离的参数
      */
-    pickFields: string[];
+    pickFields?: string[];
     /**
      * 覆盖配置
      */
@@ -149,7 +149,9 @@ export function flattenFields<T extends TableFieldsMap>(metadata: T, config: Fla
         }, {})
     }
 
-    const obj = flattenObj(name);
-    const pickObj = pick(obj, pickFields);
-    return merge(pickObj, mergeFields);
+    let obj = flattenObj(name);
+    if (pickFields) {
+        obj = pick(obj, pickFields);
+    }
+    return merge(obj, mergeFields);
 }
