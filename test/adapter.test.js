@@ -36,9 +36,9 @@ describe("queryTable", () => {
       fields: {
         a: true
       }
-    })}`), (gql`query testList($limit:Int,$offset:Int,$order:[TestOrderType],$subQuery:Boolean,$where:JSONType,$scope:[String]){
+    })}`), (gql`query testList($limit:Int,$offset:Int,$order:[TestOrderType],$subQuery:Boolean,$groupBy:String,$where:JSONType,$scope:[String]){
     test {
-      list(limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,where:$where,scope:$scope) {
+      list(limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,groupBy:$groupBy,where:$where,scope:$scope) {
        a
     }
   }
@@ -52,10 +52,10 @@ describe("queryTable", () => {
       fields: {
         a: true
       }
-    })}`), (gql`query testList($limit:Int,$offset:Int,$order:[TestOrderType],$subQuery:Boolean,$where:JSONType,$scope:[String]){
+    })}`), (gql`query testList($limit:Int,$offset:Int,$order:[TestOrderType],$subQuery:Boolean,$groupBy:String,$where:JSONType,$scope:[String]){
     test {
-      total:aggregation(aggregateFunction:count,field: _all,where: $where)
-      list(limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,where:$where,scope:$scope) {
+      total:aggregate(fn:count,field: _all,where: $where)
+      list(limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,groupBy:$groupBy,where:$where,scope:$scope) {
        a
     }
   }
@@ -75,10 +75,10 @@ describe("queryTable", () => {
           fields: ['d', 'e']
         }
       }
-    })}`), (gql`query testList($limit:Int,$offset:Int,$order:[TestOrderType],$subQuery:Boolean,$where:JSONType,$scope:[String]){
+    })}`), (gql`query testList($limit:Int,$offset:Int,$order:[TestOrderType],$subQuery:Boolean,$groupBy:String,$where:JSONType,$scope:[String]){
     test {
-      total:aggregation(aggregateFunction:count,field: _all,where: $where)
-      list(limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,where:$where,scope:$scope) {
+      total:aggregate(fn:count,field: _all,where: $where)
+      list(limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,groupBy:$groupBy,where:$where,scope:$scope) {
        a,name:b,c{d,e}
     }
   }
@@ -217,10 +217,10 @@ describe("generateGqlFields", () => {
   }
 }`)
   });
-  it("aggregation", function () {
-    assert.strictEqual(User.aggregation({field: "id", aggregateFunction: "sum"}), `query userAggregation($where:JSONType){
+  it("aggregate", function () {
+    assert.strictEqual(User.aggregate({field: "id", fn: "sum"}), `query userAggregate($where:JSONType){
     user {
-      aggregation(aggregateFunction:sum,field: id,where: $where)
+      aggregate(fn:sum,field: id,where: $where)
     }
   }
 }`)

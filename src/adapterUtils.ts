@@ -19,7 +19,7 @@ export type QueryTableBaseParams = {
 export type AggregateFunctionMenu = 'sum' | 'max' | 'min' | 'count' | 'avg'
 
 export type QueryAggregationParams = QueryTableBaseParams & {
-    aggregateFunction: AggregateFunctionMenu,
+    fn: AggregateFunctionMenu,
     field: '_all' | string
 }
 
@@ -39,10 +39,10 @@ export type QueryTableParams = QueryTableBaseParams & {
  */
 export function queryTable(config: QueryTableParams) {
     const {name, fields, isList, withCount, otherFields} = config;
-    return `query ${name}${isList ? 'List' : 'FindOne'}(${isList ? `$limit:Int,$offset:Int,$order:[${upperFirst(name)}OrderType],$subQuery:Boolean,` : ''}$where:JSONType,$scope:[String]){
+    return `query ${name}${isList ? 'List' : 'FindOne'}(${isList ? `$limit:Int,$offset:Int,$order:[${upperFirst(name)}OrderType],$subQuery:Boolean,$groupBy:String,` : ''}$where:JSONType,$scope:[String]){
     ${name} {${withCount ? `
-      total:aggregation(aggregateFunction:count,field: _all,where: $where)` : ''}
-      ${isList ? 'list' : 'one'}(${isList ? 'limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,' : ''}where:$where,scope:$scope) {
+      total:aggregate(fn:count,field: _all,where: $where)` : ''}
+      ${isList ? 'list' : 'one'}(${isList ? 'limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,groupBy:$groupBy,' : ''}where:$where,scope:$scope) {
        ${generateFieldsText(fields)}
     }
   }${otherFields || ''}
@@ -54,11 +54,11 @@ export function queryTable(config: QueryTableParams) {
  * @param config
  * @returns {string}
  */
-export function queryAggregation(config: QueryAggregationParams) {
-    const {name, otherFields, field, aggregateFunction} = config;
-    return `query ${name}Aggregation($where:JSONType){
+export function queryAggregate(config: QueryAggregationParams) {
+    const {name, otherFields, field, fn} = config;
+    return `query ${name}Aggregate($where:JSONType){
     ${name} {
-      aggregation(aggregateFunction:${aggregateFunction},field: ${field},where: $where)
+      aggregate(fn:${fn},field: ${field},where: $where)
     }
   }${otherFields || ''}
 }`
@@ -204,7 +204,7 @@ export function flattenFields<T extends TableFieldsMap>(metadata: T, config: Fla
 
 
 type QueryTableFunc<T extends FieldMetadataMap> = (config?: { pickFields?: [keyof T] }) => string
-type QueryAggregationFunc<T extends FieldMetadataMap> = (config: { field: '_all' | keyof T, aggregateFunction: AggregateFunctionMenu }) => string
+type QueryAggregationFunc<T extends FieldMetadataMap> = (config: { field: '_all' | keyof T, fn: AggregateFunctionMenu }) => string
 
 
 type TableGqlFields<T extends TableFieldsMap> = {
@@ -212,7 +212,7 @@ type TableGqlFields<T extends TableFieldsMap> = {
         one: QueryTableFunc<T[key]>,
         list: QueryTableFunc<T[key]>,
         listPage: QueryTableFunc<T[key]>,
-        aggregation: QueryAggregationFunc<T[key]>,
+        aggregate: QueryAggregationFunc<T[key]>,
     }
 }
 
@@ -252,9 +252,9 @@ export function generateGqlFields<T extends TableFieldsMap>(metadata: T,
 
     function getQueryAggregationFunc<F extends FieldMetadataMap>(name: string):
         QueryAggregationFunc<F> {
-        return ({aggregateFunction, field}) => {
-            return queryAggregation({
-                aggregateFunction,
+        return ({fn, field}) => {
+            return queryAggregate({
+                fn,
                 name: getTableName(name),
                 field: field as string
             })
@@ -270,7 +270,7 @@ export function generateGqlFields<T extends TableFieldsMap>(metadata: T,
             one: getQueryFunc({name: key as string, isList: false, withCount: false}),
             list: getQueryFunc({name: key as string, isList: true, withCount: false}),
             listPage: getQueryFunc({name: key as string, isList: true, withCount: true}),
-            aggregation: getQueryAggregationFunc(key as string),
+            aggregate: getQueryAggregationFunc(key as string),
         }
         return memo;
     }, {} as TableGqlFields<T>)
