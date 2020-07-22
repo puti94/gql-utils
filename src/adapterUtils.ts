@@ -18,7 +18,7 @@ export type QueryTableBaseParams = {
 
 export type AggregateFunctionMenu = 'sum' | 'max' | 'min' | 'count' | 'avg'
 
-export type QueryAggregationParams = QueryTableBaseParams & {
+export type QueryAggregateParams = QueryTableBaseParams & {
     fn: AggregateFunctionMenu,
     field: '_all' | string
 }
@@ -54,7 +54,7 @@ export function queryTable(config: QueryTableParams) {
  * @param config
  * @returns {string}
  */
-export function queryAggregate(config: QueryAggregationParams) {
+export function queryAggregate(config: QueryAggregateParams) {
     const {name, otherFields, field, fn} = config;
     return `query ${name}Aggregate($where:JSONType){
     ${name} {
@@ -238,7 +238,7 @@ export function generateGqlFields<T extends TableFieldsMap>(metadata: T,
         return _cacheMap.get(name)
     }
 
-    function getQueryFunc<F extends FieldMetadataMap>(params: Omit<QueryTableParams, 'fields'> | QueryAggregationParams):
+    function getQueryFunc<F extends FieldMetadataMap>(params: Omit<QueryTableParams, 'fields'> | QueryAggregateParams):
         QueryTableFunc<F> {
         return ({pickFields} = {}) => {
             let fields = getFields(params.name as keyof T);
