@@ -16,7 +16,7 @@ export type QueryTableBaseParams = {
     otherFields?: string
 }
 
-export type AggregateFunctionMenu = 'sum' | 'max' | 'min' | 'count' | 'avg'
+export type AggregateFunctionMenu = 'SUM' | 'MAX' | 'MIN' | 'COUNT' | 'AVG'
 
 export type QueryAggregateParams = QueryTableBaseParams & {
     fn: AggregateFunctionMenu,
@@ -41,7 +41,7 @@ export function queryTable(config: QueryTableParams) {
     const {name, fields, isList, withCount, otherFields} = config;
     return `query ${name}${isList ? 'List' : 'FindOne'}(${isList ? `$limit:Int,$offset:Int,$order:[${upperFirst(name)}OrderType],$subQuery:Boolean,$groupBy:String,` : ''}$where:JSONType,$scope:[String]){
     ${name} {${withCount ? `
-      total:aggregate(fn:count,field: _all,where: $where)` : ''}
+      total:aggregate(fn:COUNT,field: _all,where: $where)` : ''}
       ${isList ? 'list' : 'one'}(${isList ? 'limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,groupBy:$groupBy,' : ''}where:$where,scope:$scope) {
        ${generateFieldsText(fields)}
     }
