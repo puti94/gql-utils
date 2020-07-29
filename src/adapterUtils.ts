@@ -3,13 +3,18 @@
  * 地址 https://github.com/puti94/graphql-adapter
  */
 import {FieldsArgs, FieldsListArgs, generateFieldsText} from './generateText'
+import {ApolloClient} from 'apollo-client/index.d.ts'
 import upperFirst from 'lodash/upperFirst'
-
+import gql from 'graphql-tag'
+import {DocumentNode} from 'graphql'
 import pick from 'lodash/pick'
+import omit from 'lodash/omit'
 import set from 'lodash/set'
+import get from 'lodash/get'
 import merge from 'lodash/merge'
 
-export type QueryTableBaseParams = {
+
+export type GqlBaseParams = {
     //表名
     name: string,
     //同级的其它查询字段
@@ -18,12 +23,13 @@ export type QueryTableBaseParams = {
 
 export type AggregateFunctionMenu = 'SUM' | 'MAX' | 'MIN' | 'COUNT' | 'AVG'
 
-export type QueryAggregateParams = QueryTableBaseParams & {
+export type QueryAggregateParams = GqlBaseParams & {
     fn: AggregateFunctionMenu,
-    field: '_all' | string
+    field: '_all' | string,
+    alias?: string,
 }
 
-export type QueryTableParams = QueryTableBaseParams & {
+export type QueryTableParams = GqlBaseParams & {
     //查询字段
     fields: FieldsArgs,
     //是否查询列表
@@ -39,10 +45,10 @@ export type QueryTableParams = QueryTableBaseParams & {
  */
 export function queryTable(config: QueryTableParams) {
     const {name, fields, isList, withCount, otherFields} = config;
-    return `query ${name}${isList ? 'List' : 'FindOne'}(${isList ? `$limit:Int,$offset:Int,$order:[${upperFirst(name)}OrderType],$subQuery:Boolean,$groupBy:String,` : ''}$where:JSONType,$scope:[String]){
+    return `query ${name}${isList ? 'List' : 'FindOne'}(${isList ? `$limit:Int,$offset:Int,$order:[${upperFirst(name)}OrderType],$subQuery:Boolean,` : ''}$where:JSONType,$scope:[String]){
     ${name} {${withCount ? `
       total:aggregate(fn:COUNT,field: _all,where: $where)` : ''}
-      ${isList ? 'list' : 'one'}(${isList ? 'limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,groupBy:$groupBy,' : ''}where:$where,scope:$scope) {
+      ${isList ? 'list' : 'one'}(${isList ? 'limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,' : ''}where:$where,scope:$scope) {
        ${generateFieldsText(fields)}
     }
   }${otherFields || ''}
@@ -55,15 +61,65 @@ export function queryTable(config: QueryTableParams) {
  * @returns {string}
  */
 export function queryAggregate(config: QueryAggregateParams) {
-    const {name, otherFields, field, fn} = config;
+    const {name, otherFields, field, fn, alias} = config;
     return `query ${name}Aggregate($where:JSONType){
     ${name} {
-      aggregate(fn:${fn},field: ${field},where: $where)
-    }
-  }${otherFields || ''}
+      ${alias ? `${alias}:` : ''}aggregate(fn:${fn},field: ${field},where: $where)
+    }${otherFields || ''}
 }`
 }
 
+type MutateCreateParams = GqlBaseParams & { fields: FieldsArgs };
+
+/**
+ * 生成创建语句
+ * @param config
+ * @returns {string}
+ */
+export function mutateCreate(config: MutateCreateParams) {
+    const {name, fields} = config;
+    return `mutation ${name}Create($data:${upperFirst(name)}CreateInput!){
+    ${name} {
+      create(data: $data){
+        ${generateFieldsText(fields)}
+      }
+    }
+}`
+}
+
+type MutateUpdateParams<T extends FieldMetadataMap> = GqlBaseParams & { fields: FieldsArgs, pkName: keyof T };
+
+/**
+ * 生成更新语句
+ * @param config
+ * @returns {string}
+ */
+export function mutateUpdate<T extends FieldMetadataMap>(config: MutateUpdateParams<T>) {
+    const {name, fields, pkName} = config;
+    return `mutation ${name}Update($data:${upperFirst(name)}UpdateInput!,$id:ID!){
+    ${name} {
+      update(data: $data,${pkName}: $id){
+        ${generateFieldsText(fields)}
+      }
+    }
+}`
+}
+
+type MutateRemoveParams<T extends FieldMetadataMap> = GqlBaseParams & { pkName: keyof T };
+
+/**
+ * 生成删除语句
+ * @param config
+ * @returns {string}
+ */
+export function mutateRemove<T extends FieldMetadataMap>(config: MutateRemoveParams<T>) {
+    const {name, pkName} = config;
+    return `mutation ${name}Remove($id:ID!){
+    ${name} {
+      remove(${pkName}: $id)
+    }
+}`
+}
 
 export type FieldMetadata = {
     type: string;
@@ -79,32 +135,44 @@ export type FieldMetadataMap = {
 }
 
 export type TableFieldsMap = {
-    [tableType: string]: FieldMetadataMap
+    [name: string]: FieldMetadataMap
 }
 
-export type FlattenConfig<T extends TableFieldsMap> = {
+export type PickConfig<T extends TableFieldsMap> = {
+    /**
+     * 递归的深度，关联字段的层级
+     */
+    deep?: number;
+    /**
+     * 选取的字段，优先级高
+     */
+    only?: [keyof T | string],
+    /**
+     * 剔除的字段，优先级高
+     */
+    exclude?: [keyof T | string]
+}
+
+
+export type FlattenConfig<T extends TableFieldsMap> = PickConfig<T> & {
     /**
      * 类型名
      */
     name: keyof T;
     /**
-     * 递归的深度,默认3
-     */
-    deep?: number;
-    /**
-     * 抽离的参数
-     */
-    pickFields?: string[];
-    /**
      * 覆盖配置
      */
     mergeFields?: {
-        [name: string]: Partial<FieldMetadata>
+        [name in keyof T]: Partial<FieldMetadata>
     };
 };
 
-type TableMetadata = {
+export type TableMetadata = {
     type: string,
+    pkName?: string,
+    createAble?: boolean;
+    editable?: boolean;
+    removeAble?: boolean;
     fields: {
         type: string;
         title: string;
@@ -119,10 +187,11 @@ type TableMetadata = {
  * 生成type和字段的映射关系
  * @param list
  * @returns {TableFieldsMap}
+ * @param key
  */
-export function tableList2Map(list: TableMetadata[]): TableFieldsMap {
+export function tableList2Map(list: TableMetadata[], key: 'type' | 'name' = 'type'): TableFieldsMap {
     return list.reduce<TableFieldsMap>((memo, tableItem) => {
-        memo[tableItem.type] = tableItem.fields.reduce<FieldMetadataMap>((fields, fieldItem) => {
+        memo[tableItem[key]] = tableItem.fields.reduce<FieldMetadataMap>((fields, fieldItem) => {
             const {name, ...other} = fieldItem;
             fields[name] = {
                 ...other
@@ -145,6 +214,18 @@ export function tableList2TypeNameMap(list: TableMetadata[]): { [type: string]: 
     }, {})
 }
 
+/**
+ * 生成name和type的映射关系
+ * @param list
+ * @returns {{[p: string]: string}}
+ */
+export function tableList2NameTypeMap(list: TableMetadata[]): { [type: string]: string } {
+    return list.reduce<{ [type: string]: string }>((memo, item) => {
+        memo[item.name] = item.type;
+        return memo
+    }, {})
+}
+
 function getField(field: FieldMetadata, key: string, parentName?: string) {
     const fieldData = field.field || key;
     if (!parentName) return fieldData
@@ -159,6 +240,21 @@ function getField(field: FieldMetadata, key: string, parentName?: string) {
     return set({name: first}, `fields.${other.join('.fields.')}.fields`, fields)
 }
 
+/**
+ * 获取选取的字段
+ * @param fields
+ * @param only
+ * @param exclude
+ * @returns {FieldMetadataMap}
+ */
+export function getPickFields<T extends TableFieldsMap>(fields: FieldMetadataMap, {only, exclude}: Omit<PickConfig<T>, 'deep'>): FieldMetadataMap {
+    if (only) {
+        fields = pick(fields, only);
+    } else if (exclude) {
+        fields = omit(fields, exclude)
+    }
+    return fields
+}
 
 /**
  * 扁平化选项
@@ -167,7 +263,7 @@ function getField(field: FieldMetadata, key: string, parentName?: string) {
  * @returns {any}
  */
 export function flattenFields<T extends TableFieldsMap>(metadata: T, config: FlattenConfig<T>): FieldMetadataMap {
-    const {name, deep = 3, pickFields, mergeFields = {}} = config;
+    const {name, deep = 3, only, exclude, mergeFields = {}} = config;
     const fieldsMap = metadata[name];
     if (!fieldsMap) return {}
 
@@ -195,83 +291,5 @@ export function flattenFields<T extends TableFieldsMap>(metadata: T, config: Fla
         }, {})
     }
 
-    let obj = flattenObj(name);
-    if (pickFields) {
-        obj = pick(obj, pickFields);
-    }
-    return merge(obj, mergeFields);
-}
-
-
-type QueryTableFunc<T extends FieldMetadataMap> = (config?: { pickFields?: [keyof T] }) => string
-type QueryAggregationFunc<T extends FieldMetadataMap> = (config: { field: '_all' | keyof T, fn: AggregateFunctionMenu }) => string
-
-
-type TableGqlFields<T extends TableFieldsMap> = {
-    [key in keyof T]: {
-        one: QueryTableFunc<T[key]>,
-        list: QueryTableFunc<T[key]>,
-        listPage: QueryTableFunc<T[key]>,
-        aggregate: QueryAggregationFunc<T[key]>,
-    }
-}
-
-
-/**
- * 自动生成查询方法
- * @param metadata
- * @returns {TableGqlFields<T>}
- * @param config
- */
-export function generateGqlFields<T extends TableFieldsMap>(metadata: T,
-                                                            config: { deep?: number, typeNameMap?: { [type: string]: string } } =
-                                                                {
-                                                                    deep: 3,
-                                                                    typeNameMap: {}
-                                                                }): TableGqlFields<T> {
-    const _cacheMap = new Map<keyof T, FieldMetadataMap>();
-
-    function getFields(name: keyof T) {
-        if (!_cacheMap.has(name)) {
-            _cacheMap.set(name, flattenFields(metadata, {name, deep: config.deep}))
-        }
-        return _cacheMap.get(name)
-    }
-
-    function getQueryFunc<F extends FieldMetadataMap>(params: Omit<QueryTableParams, 'fields'> | QueryAggregateParams):
-        QueryTableFunc<F> {
-        return ({pickFields} = {}) => {
-            let fields = getFields(params.name as keyof T);
-            if (pickFields) {
-                fields = pick(fields, pickFields);
-            }
-            const pickFieldList = Object.values(fields).map(t => t.field);
-            return queryTable({...params, name: getTableName(params.name), fields: pickFieldList})
-        }
-    }
-
-    function getQueryAggregationFunc<F extends FieldMetadataMap>(name: string):
-        QueryAggregationFunc<F> {
-        return ({fn, field}) => {
-            return queryAggregate({
-                fn,
-                name: getTableName(name),
-                field: field as string
-            })
-        }
-    }
-
-    function getTableName(type: string): string {
-        return config.typeNameMap[type] || type
-    }
-
-    return Object.keys(metadata).reduce<TableGqlFields<T>>((memo, key: keyof T) => {
-        memo[key] = {
-            one: getQueryFunc({name: key as string, isList: false, withCount: false}),
-            list: getQueryFunc({name: key as string, isList: true, withCount: false}),
-            listPage: getQueryFunc({name: key as string, isList: true, withCount: true}),
-            aggregate: getQueryAggregationFunc(key as string),
-        }
-        return memo;
-    }, {} as TableGqlFields<T>)
+    return merge(getPickFields(flattenObj(name), {only, exclude}), mergeFields);
 }

@@ -36,9 +36,9 @@ describe("queryTable", () => {
       fields: {
         a: true
       }
-    })}`), (gql`query testList($limit:Int,$offset:Int,$order:[TestOrderType],$subQuery:Boolean,$groupBy:String,$where:JSONType,$scope:[String]){
+    })}`), (gql`query testList($limit:Int,$offset:Int,$order:[TestOrderType],$subQuery:Boolean,$where:JSONType,$scope:[String]){
     test {
-      list(limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,groupBy:$groupBy,where:$where,scope:$scope) {
+      list(limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,where:$where,scope:$scope) {
        a
     }
   }
@@ -52,10 +52,10 @@ describe("queryTable", () => {
       fields: {
         a: true
       }
-    })}`), (gql`query testList($limit:Int,$offset:Int,$order:[TestOrderType],$subQuery:Boolean,$groupBy:String,$where:JSONType,$scope:[String]){
+    })}`), (gql`query testList($limit:Int,$offset:Int,$order:[TestOrderType],$subQuery:Boolean,$where:JSONType,$scope:[String]){
     test {
-      total:aggregate(fn:count,field: _all,where: $where)
-      list(limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,groupBy:$groupBy,where:$where,scope:$scope) {
+      total:aggregate(fn:COUNT,field: _all,where: $where)
+      list(limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,where:$where,scope:$scope) {
        a
     }
   }
@@ -75,10 +75,10 @@ describe("queryTable", () => {
           fields: ['d', 'e']
         }
       }
-    })}`), (gql`query testList($limit:Int,$offset:Int,$order:[TestOrderType],$subQuery:Boolean,$groupBy:String,$where:JSONType,$scope:[String]){
+    })}`), (gql`query testList($limit:Int,$offset:Int,$order:[TestOrderType],$subQuery:Boolean,$where:JSONType,$scope:[String]){
     test {
-      total:aggregate(fn:count,field: _all,where: $where)
-      list(limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,groupBy:$groupBy,where:$where,scope:$scope) {
+      total:aggregate(fn:COUNT,field: _all,where: $where)
+      list(limit:$limit,offset:$offset,order:$order,subQuery:$subQuery,where:$where,scope:$scope) {
        a,name:b,c{d,e}
     }
   }
