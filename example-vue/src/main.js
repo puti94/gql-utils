@@ -2,9 +2,9 @@ import Vue from 'vue'
 import App from './App.vue'
 import ApolloClient from 'apollo-boost'
 import VueCompositionAPI, {provide} from '@vue/composition-api'
-import {DefaultApolloClient} from '@vue/apollo-composable'
-import {createGqlApi} from '../../dist'
-import metadata from "./assets/metadata";
+import {DefaultApolloClient, useQuery,useResult} from '@vue/apollo-composable'
+import {createGqlApi} from 'lib'
+import metadata from "../metadata";
 
 Vue.config.productionTip = false
 
@@ -15,7 +15,10 @@ const apolloClient = new ApolloClient({
 Vue.use(VueCompositionAPI)
 export const api = createGqlApi(
     metadata, {
-      client: apolloClient, metadataMap: {
+      client: apolloClient,
+      useVueQuery: useQuery,
+      useResult,
+      metadataMap: {
         Account: {
           type: 'Account',
           pkName: 'uuid',
@@ -27,7 +30,6 @@ export const api = createGqlApi(
     }
 )
 Vue.prototype.$api = api;
-
 new Vue({
   setup() {
     provide(DefaultApolloClient, apolloClient)

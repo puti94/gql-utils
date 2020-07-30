@@ -11,7 +11,7 @@
   },
   "author": "puti94",
   "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "types": "dist/type.d.ts",
   "license": "MIT",
   "keywords": [
     "graphql",
@@ -35,10 +35,12 @@
     "LICENSE"
   ],
   "devDependencies": {
+    "@apollo/client": "^3.1.1",
     "@types/chai": "^4.2.11",
     "@types/lodash": "^4.14.150",
     "@types/mocha": "^7.0.2",
     "@types/node": "^12.7.8",
+    "@types/react": "^16.9.43",
     "@types/validator": "^13.0.0",
     "@typescript-eslint/eslint-plugin": "^2.3.1",
     "@typescript-eslint/parser": "^2.3.1",

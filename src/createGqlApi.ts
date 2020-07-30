@@ -2,91 +2,44 @@
  * graphql-adapter库的工具类
  * 地址 https://github.com/puti94/graphql-adapter
  */
-import {ApolloClient, QueryOptions, ApolloQueryResult, OperationVariables} from 'apollo-client/index.d.ts'
+
 import gql from 'graphql-tag'
-import {DocumentNode} from 'graphql'
-import get from 'lodash/get'
 import {
-    FieldMetadataMap,
-    PickConfig,
-    AggregateFunctionMenu,
-    TableFieldsMap,
-    TableMetadata,
     flattenFields,
     getPickFields,
-    QueryTableParams,
-    QueryAggregateParams,
     queryTable,
     queryAggregate,
     mutateCreate,
     mutateUpdate,
     mutateRemove
 } from "./adapterUtils";
-import {MutationOptions} from "apollo-client/core/watchQueryOptions";
-import {FetchResult} from "apollo-link";
-import {WhereOptions} from "./type";
 
+import get from 'lodash/get'
 
-export type GqlMethod<T extends FieldMetadataMap, TOptions, TReturn> = (config?: TOptions) => TReturn
-export type QueryTableOptions<T extends FieldMetadataMap> = PickConfig<T>
-export type QueryAggregateOptions<T extends FieldMetadataMap> = { field: '_all' | keyof T, fn: AggregateFunctionMenu }
+import {
+    GqlApiConfig,
+    TableGqlFields,
+    GqlMethod,
+    QueryTableOptions,
+    TableMetadataMap,
+    FieldMetadataMap,
+    PickConfig,
+    QueryTableParams,
+    QueryAggregateParams, TableFieldsMap
+} from "./type";
 
-export type GqlMethods<T extends FieldMetadataMap, TOptions> = {
-    text: GqlMethod<T, TOptions, string>,
-    gql: GqlMethod<T, TOptions, DocumentNode>
+function defaultUseResult(data: any, defaultValue: any, pick: (data: any) => any): any {
+    return data === null || data === undefined ? data : pick(data)
 }
 
-export type GqlQueryMethods<T extends FieldMetadataMap, TOptions, TVariables> = GqlMethods<T, TOptions> & {
-    query<T = any>(options?: Omit<QueryOptions<TVariables>, "query"> & TOptions): Promise<ApolloQueryResult<T>>
-}
-
-export type GqlMutationMethods<T extends FieldMetadataMap, TOptions, TVariables> = GqlMethods<T, TOptions> & {
-    mutate<T = any>(options?: Omit<MutationOptions<TVariables>, "mutation"> & TOptions & { variables: TVariables }): Promise<FetchResult<T>>
-}
-
-export type QueryOneVariables<T extends FieldMetadataMap> = {
-    where?: WhereOptions<T>,
-    scope?: string[]
-}
-
-export type QueryListVariables<T extends FieldMetadataMap> = QueryOneVariables<T> &
-    {
-        limit?: number,
-        offset?: number,
-        subQuery?: boolean,
-        order?: { name: keyof T, sort?: 'asc' | 'desc' }[]
-    }
-
-export type MutationInputVariables<T extends FieldMetadataMap> = {
-    data: {
-        [name in keyof T]?: any
+function getResult(key: string, type: string) {
+    return (data: any) => {
+        if (type === 'listPage') {
+            return get(data, key)
+        }
+        return get(data, `${key}.${type}`)
     }
 }
-
-export type MutationUpdateVariables<T extends FieldMetadataMap> = MutationInputVariables<T> & {
-    id: string | number
-}
-
-export type TableGqlFields<T extends TableFieldsMap> = {
-    [key in keyof T]: {
-        readonly one: GqlQueryMethods<T[key], QueryTableOptions<T[key]>, QueryOneVariables<T[key]>>,
-        readonly list: GqlQueryMethods<T[key], QueryTableOptions<T[key]>, QueryListVariables<T[key]>>,
-        readonly listPage: GqlQueryMethods<T[key], QueryTableOptions<T[key]>, QueryListVariables<T[key]>>,
-        readonly aggregate: GqlQueryMethods<T[key], QueryAggregateOptions<T[key]>, { where?: WhereOptions<T[key]> }>,
-        readonly create?: GqlMutationMethods<T[key], Omit<PickConfig<T[key]>, 'deep'>, MutationInputVariables<T[key]>>,
-        readonly update?: GqlMutationMethods<T[key], Omit<PickConfig<T[key]>, 'deep'>, MutationUpdateVariables<T[key]>>,
-        readonly remove?: GqlMutationMethods<T[key], undefined, {
-            id: string | number
-        }>,
-    }
-}
-
-type GqlApiConfig<T extends TableFieldsMap> =
-    {
-        deep?: number,
-        client?: ApolloClient<any>,
-        metadataMap: { [type in keyof T]?: Partial<TableMetadata> }
-    };
 
 /**
  * 自动生成查询方法
@@ -94,21 +47,28 @@ type GqlApiConfig<T extends TableFieldsMap> =
  * @returns {TableGqlFields<T>}
  * @param apiConfig
  */
-export function createGqlApi<T extends TableFieldsMap>(
+export function createGqlApi<T extends TableMetadataMap>(
     metadata: T,
     apiConfig: GqlApiConfig<T>
-        = {deep: 3, metadataMap: {}}): TableGqlFields<T> {
+        = {}): TableGqlFields<T> {
+
+    apiConfig = {
+        deep: 3,
+        useResult: defaultUseResult,
+        ...apiConfig,
+    }
+
     const _cacheMap = new Map<keyof T, FieldMetadataMap>();
 
     function getTableTypeName(name: keyof T): string {
-        return (apiConfig.metadataMap[name]?.type || name) as string
+        return (metadata[name]?.type || name) as string
     }
 
-    function getFields<N extends keyof T>(name: N, {deep = apiConfig.deep, exclude, only}: PickConfig<T[N]> = {}) {
+    function getFields<N extends keyof T>(name: N, {deep = apiConfig.deep, exclude, only}: PickConfig<T[N]['fields']> = {}) {
         const key = `${name}|${deep}`
         if (!_cacheMap.has(key)) {
             const typeKeyMetadata = Object.keys(metadata).reduce<TableFieldsMap>((memo, key: keyof T) => {
-                memo[getTableTypeName(key)] = metadata[key];
+                memo[getTableTypeName(key)] = metadata[key].fields;
                 return memo
             }, {})
             _cacheMap.set(key, flattenFields(typeKeyMetadata, {name: getTableTypeName(name), deep}))
@@ -136,11 +96,41 @@ export function createGqlApi<T extends TableFieldsMap>(
         }
     }
 
-    function getGqlQueryMethods<TOptions, TVariables>(getText: GqlMethod<FieldMetadataMap, TOptions, string>) {
+    function getGqlQueryMethods<TOptions, TVariables>(getText: GqlMethod<FieldMetadataMap, TOptions, string>, key: keyof T, type: string) {
+
         return {
             ...getGqlMethods(getText),
             query<T>(options = {}) {
-                return apiConfig.client.query({query: gql(`${getText(options as TOptions)}`), ...options})
+                if (!apiConfig.client) throw new Error('尚未配置client');
+                return apiConfig.client.query({query: gql`${getText(options as TOptions)}`, ...options})
+            },
+            readQuery(options = {}) {
+                if (!apiConfig.client) throw new Error('尚未配置client');
+                return apiConfig.client.readQuery({query: gql`${getText(options as TOptions)}`, ...options})
+            },
+            writeQuery<TData>(options: { variables?: TVariables, data: TData } & TOptions) {
+                if (!apiConfig.client) throw new Error('尚未配置client');
+                apiConfig.client.writeQuery({query: gql`${getText(options as TOptions)}`, ...options})
+            },
+            useQuery(options = {}) {
+                if (!apiConfig.useVueQuery && !apiConfig.useReactQuery) throw new Error('尚未传入useQuery方法')
+                if (apiConfig.useVueQuery) {
+                    // @ts-ignore
+                    const {result, ...other} = apiConfig.useVueQuery(gql`${getText(options as TOptions)}`, options.variables, options);
+                    const data = apiConfig.useResult(result, null, getResult(key as string, type))
+                    return {
+                        result,
+                        ...other,
+                        data
+                    }
+                } else if (apiConfig.useReactQuery) {
+                    const {data, ...other} = apiConfig.useReactQuery(gql`${getText(options as TOptions)}`, options);
+                    const handleData = apiConfig.useResult(data, null, getResult(key as string, type))
+                    return {
+                        ...other,
+                        data: handleData
+                    }
+                }
             }
         }
     }
@@ -156,46 +146,52 @@ export function createGqlApi<T extends TableFieldsMap>(
     }
 
     return Object.keys(metadata).reduce<TableGqlFields<T>>((memo, key: keyof T) => {
+        const {createAble, editable, pkName, removeAble} = metadata[key]
+        // @ts-ignore
         memo[key] = {
-            one: getGqlQueryMethods(getQueryFunc({name: key as string, isList: false, withCount: false})),
-            list: getGqlQueryMethods(getQueryFunc({name: key as string, isList: true, withCount: false})),
+            one: getGqlQueryMethods(getQueryFunc({name: key as string, isList: false, withCount: false}), key, 'one'),
+            list: getGqlQueryMethods(getQueryFunc({name: key as string, isList: true, withCount: false}), key, 'list'),
             listPage: getGqlQueryMethods(getQueryFunc({
                 name: key as string,
                 isList: true,
                 withCount: true
-            })),
+            }), key, 'listPage'),
             aggregate: getGqlQueryMethods(({fn, field}) => {
                 return queryAggregate({
                     fn,
                     name,
                     field: field as string
                 })
-            }),
-            create: get(apiConfig.metadataMap, `${key}.createAble`) ? getGqlMutationMethods((options = {}) => mutateCreate({
+            }, key, 'aggregate'),
+            create: createAble ? getGqlMutationMethods((options = {}) => mutateCreate({
                 name: key as string,
                 fields: getFields(key, {deep: 1, ...options})
             })) : undefined,
-            update: get(apiConfig.metadataMap, `${key}.editable`) ? getGqlMutationMethods((options = {}) => mutateUpdate({
+            update: editable ? getGqlMutationMethods((options = {}) => mutateUpdate({
                 name: key as string,
-                pkName: get(apiConfig.metadataMap, `${key}.pkName`) as string,
+                pkName,
                 fields: getFields(key, {deep: 1, ...options})
             })) : undefined,
-            remove: get(apiConfig.metadataMap, `${key}.removeAble`) ? getGqlMutationMethods(() => mutateRemove({
+            remove: removeAble ? getGqlMutationMethods(() => mutateRemove({
                 name: key as string,
-                pkName: get(apiConfig.metadataMap, `${key}.pkName`) as string,
+                pkName,
             })) : undefined,
         }
         return memo;
     }, {} as TableGqlFields<T>)
 }
 
-// const api = createGqlApi({
-//     user: {name: {type: "id"}, tasks: {type: 'Task'}},
-//     task: {title: {type: "id"}}
-// }, {
-//     metadataMap: {
-//         user: {removeAble: true, createAble: true, editable: true, pkName: 'name'},
-//         task: {type: 'Task', removeAble: true, createAble: true, editable: true, pkName: 'name'}
-//     }
-// })
 
+// const api = createGqlApi({
+//     user: {
+//         type: 'User',
+//         name: 'user',
+//         fields: {name1111: {type: "id"}, tasks: {type: 'Task'}, id: {type: 'obj'}}
+//     },
+//     task: {
+//         type: 'Task',
+//         name: 'task',
+//         fields: {title: {type: "id"}}
+//     }
+// }, {})
+// api.user.aggregate.useQuery({field: "name1111",fn:"COUNT"})

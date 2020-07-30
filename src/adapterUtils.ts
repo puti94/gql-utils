@@ -2,41 +2,24 @@
  * graphql-adapter库的工具类
  * 地址 https://github.com/puti94/graphql-adapter
  */
-import {FieldsArgs, FieldsListArgs, generateFieldsText} from './generateText'
-import {ApolloClient} from 'apollo-client/index.d.ts'
+import {generateFieldsText} from './generateText'
 import upperFirst from 'lodash/upperFirst'
-import gql from 'graphql-tag'
-import {DocumentNode} from 'graphql'
 import pick from 'lodash/pick'
 import omit from 'lodash/omit'
 import set from 'lodash/set'
-import get from 'lodash/get'
 import merge from 'lodash/merge'
+import {
+    MutateCreateParams,
+    QueryAggregateParams,
+    QueryTableParams,
+    FieldMetadataMap,
+    MutateUpdateParams,
+    MutateRemoveParams,
+    TableMetadata,
+    TableFieldsMap,
+    FieldMetadata, PickConfig, FlattenConfig
+} from './type'
 
-
-export type GqlBaseParams = {
-    //表名
-    name: string,
-    //同级的其它查询字段
-    otherFields?: string
-}
-
-export type AggregateFunctionMenu = 'SUM' | 'MAX' | 'MIN' | 'COUNT' | 'AVG'
-
-export type QueryAggregateParams = GqlBaseParams & {
-    fn: AggregateFunctionMenu,
-    field: '_all' | string,
-    alias?: string,
-}
-
-export type QueryTableParams = GqlBaseParams & {
-    //查询字段
-    fields: FieldsArgs,
-    //是否查询列表
-    isList?: boolean,
-    //是否返回总量
-    withCount?: boolean
-};
 
 /**
  * 生成查询单个表的语句
@@ -69,7 +52,6 @@ export function queryAggregate(config: QueryAggregateParams) {
 }`
 }
 
-type MutateCreateParams = GqlBaseParams & { fields: FieldsArgs };
 
 /**
  * 生成创建语句
@@ -87,8 +69,6 @@ export function mutateCreate(config: MutateCreateParams) {
 }`
 }
 
-type MutateUpdateParams<T extends FieldMetadataMap> = GqlBaseParams & { fields: FieldsArgs, pkName: keyof T };
-
 /**
  * 生成更新语句
  * @param config
@@ -105,7 +85,6 @@ export function mutateUpdate<T extends FieldMetadataMap>(config: MutateUpdatePar
 }`
 }
 
-type MutateRemoveParams<T extends FieldMetadataMap> = GqlBaseParams & { pkName: keyof T };
 
 /**
  * 生成删除语句
@@ -121,67 +100,6 @@ export function mutateRemove<T extends FieldMetadataMap>(config: MutateRemovePar
 }`
 }
 
-export type FieldMetadata = {
-    type: string;
-    title?: string;
-    prop?: string;
-    field?: string | FieldsListArgs;
-    isList?: boolean;
-    [props: string]: any;
-}
-
-export type FieldMetadataMap = {
-    [name: string]: FieldMetadata,
-}
-
-export type TableFieldsMap = {
-    [name: string]: FieldMetadataMap
-}
-
-export type PickConfig<T extends TableFieldsMap> = {
-    /**
-     * 递归的深度，关联字段的层级
-     */
-    deep?: number;
-    /**
-     * 选取的字段，优先级高
-     */
-    only?: [keyof T | string],
-    /**
-     * 剔除的字段，优先级高
-     */
-    exclude?: [keyof T | string]
-}
-
-
-export type FlattenConfig<T extends TableFieldsMap> = PickConfig<T> & {
-    /**
-     * 类型名
-     */
-    name: keyof T;
-    /**
-     * 覆盖配置
-     */
-    mergeFields?: {
-        [name in keyof T]: Partial<FieldMetadata>
-    };
-};
-
-export type TableMetadata = {
-    type: string,
-    pkName?: string,
-    createAble?: boolean;
-    editable?: boolean;
-    removeAble?: boolean;
-    fields: {
-        type: string;
-        title: string;
-        prop?: string;
-        name: string;
-        isList?: boolean;
-    }[],
-    name: string
-};
 
 /**
  * 生成type和字段的映射关系
@@ -291,5 +209,7 @@ export function flattenFields<T extends TableFieldsMap>(metadata: T, config: Fla
         }, {})
     }
 
-    return merge(getPickFields(flattenObj(name), {only, exclude}), mergeFields);
+    const fields = flattenObj(name);
+    const pickFields = getPickFields(fields, {only, exclude});
+    return merge(pickFields, mergeFields);
 }

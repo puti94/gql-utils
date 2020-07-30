@@ -2,7 +2,7 @@ const Utils = require("../dist/adapterUtils");
 const gql = require("graphql-tag");
 const assert = require("assert");
 const _ = require("lodash");
-const {tableList, tableMap} = require('./metadata')
+const {tableList, tableMap} = require('../example-vue/metadata')
 
 describe("queryTable", () => {
   it("queryTable with one and obj fields", function () {
