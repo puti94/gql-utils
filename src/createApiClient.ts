@@ -25,7 +25,9 @@ import {
     FieldMetadataMap,
     PickConfig,
     QueryTableParams,
-    QueryAggregateParams, TableFieldsMap
+    QueryAggregateParams,
+    TableFieldsMap,
+    TypeOptions
 } from "./type";
 
 function defaultUseResult(data: any, defaultValue: any, pick: (data: any) => any): any {
@@ -47,14 +49,13 @@ function getResult(key: string, type: string) {
  * @returns {TableGqlFields<T>}
  * @param apiConfig
  */
-export function createGqlApi<T extends TableMetadataMap>(
-    metadata: T,
-    apiConfig: GqlApiConfig<T>
-        = {}): TableGqlFields<T> {
+export function createGqlApi<T extends TableMetadataMap, Type extends TypeOptions = 'vue'>(
+    metadata: T, apiConfig: GqlApiConfig<T, Type> = {} as GqlApiConfig<T, Type>): TableGqlFields<T, Type> {
 
     apiConfig = {
         deep: 3,
         useResult: defaultUseResult,
+        type: 'vue',
         ...apiConfig,
     }
 
@@ -100,13 +101,15 @@ export function createGqlApi<T extends TableMetadataMap>(
 
         return {
             ...getGqlMethods(getText),
-            query<T>(options = {}) {
+            query(options = {}) {
                 if (!apiConfig.client) throw new Error('尚未配置client');
                 return apiConfig.client.query({query: gql`${getText(options as TOptions)}`, ...options})
+                    .then(res => ({...res, data: getResult(key as string, type)(res.data)}))
             },
             readQuery(options = {}) {
                 if (!apiConfig.client) throw new Error('尚未配置client');
                 return apiConfig.client.readQuery({query: gql`${getText(options as TOptions)}`, ...options})
+                    .then((res: any) => getResult(key as string, type)(res))
             },
             writeQuery<TData>(options: { variables?: TVariables, data: TData } & TOptions) {
                 if (!apiConfig.client) throw new Error('尚未配置client');
@@ -131,16 +134,27 @@ export function createGqlApi<T extends TableMetadataMap>(
                         data: handleData
                     }
                 }
-            }
+            },
+
         }
     }
 
-    function getGqlMutationMethods<TOptions, TVariables>(getText: GqlMethod<FieldMetadataMap, TOptions, string>) {
+    function getGqlMutationMethods<TOptions, TVariables>(getText: GqlMethod<FieldMetadataMap, TOptions, string>, key: keyof T, type: string) {
+        const {} = apiConfig
         return {
             ...getGqlMethods(getText),
             mutate<T>(options = {}) {
                 if (!apiConfig.client) throw new Error('尚未配置client');
                 return apiConfig.client.mutate<T, TVariables>({mutation: gql(`${getText(options as TOptions)}`), ...options})
+            },
+            useMutation(options = {}) {
+                if (!apiConfig.useVueMutation && !apiConfig.useReactMutation) throw new Error('尚未传入useMutation方法')
+                if (apiConfig.useVueMutation) {
+                    return apiConfig.useVueMutation(gql`${getText(options as TOptions)}`, options)
+                } else if (apiConfig.useReactMutation) {
+                    return apiConfig.useReactMutation(gql`${getText(options as TOptions)}`, options)
+                }
+
             }
         }
     }
@@ -166,19 +180,19 @@ export function createGqlApi<T extends TableMetadataMap>(
             create: createAble ? getGqlMutationMethods((options = {}) => mutateCreate({
                 name: key as string,
                 fields: getFields(key, {deep: 1, ...options})
-            })) : undefined,
+            }), key, 'create') : undefined,
             update: editable ? getGqlMutationMethods((options = {}) => mutateUpdate({
                 name: key as string,
                 pkName,
                 fields: getFields(key, {deep: 1, ...options})
-            })) : undefined,
+            }), key, 'update') : undefined,
             remove: removeAble ? getGqlMutationMethods(() => mutateRemove({
                 name: key as string,
                 pkName,
-            })) : undefined,
+            }), key, 'remove') : undefined,
         }
         return memo;
-    }, {} as TableGqlFields<T>)
+    }, {} as TableGqlFields<T, Type>)
 }
 
 
@@ -194,4 +208,4 @@ export function createGqlApi<T extends TableMetadataMap>(
 //         fields: {title: {type: "id"}}
 //     }
 // }, {})
-// api.user.aggregate.useQuery({field: "name1111",fn:"COUNT"})
+// api.user.create.useMutation({variables: {data: {name1111: "sas"}}}).mutate()
