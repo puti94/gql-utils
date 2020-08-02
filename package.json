@@ -1,7 +1,7 @@
 {
   "name": "@puti94/gql-utils",
-  "version": "0.4.3",
-  "description": "graphql 请求文本生成工具",
+  "version": "0.5.0",
+  "description": "graphql 工具",
   "repository": {
     "type": "git",
     "url": "https://github.com/puti94/gql-utils"

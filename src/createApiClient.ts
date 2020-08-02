@@ -17,40 +17,293 @@ import {
 import get from 'lodash/get'
 
 import {
-    GqlApiConfig,
-    TableGqlFields,
-    GqlMethod,
-    QueryTableOptions,
     TableMetadataMap,
     FieldMetadataMap,
     PickConfig,
     QueryTableParams,
     QueryAggregateParams,
     TableFieldsMap,
-    TypeOptions
+    AggregateFunctionMenu
 } from "./type";
+import * as VueType from './type-vue'
+import * as ReactType from './type-react'
+import {FetchResult} from "apollo-link";
+import {MutationFunctionOptions} from "@apollo/client/react/types/types.d.ts";
+import {ApolloClient} from "@apollo/client/index.d.ts";
+import {assertClient, assertUseMutation, assertUseQuery} from "./error";
+import {ApolloClient as BaseApolloClient, ApolloQueryResult, MutationOptions, QueryOptions} from "apollo-client";
+import {DocumentNode} from "graphql";
+import {WhereOptions} from "./sequelize-type";
 
+export type TypeOptions = VueType.TypeName | ReactType.TypeName
+
+/**
+ * 创建apiClient配置
+ */
+export type ApiConfig<T extends TableMetadataMap, Type extends TypeOptions = 'vue'> =
+    (Type extends 'vue' ?
+        {
+            /**
+             * 传入`@vue/apollo-composable`的useQuery方法
+             */
+            useQuery?: VueType.FuncUseQuery,
+            /**
+             * 传入`@vue/apollo-composable`的useMutation方法
+             */
+            useMutation?: VueType.FuncUseMutation,
+            /**
+             * 传入`@vue/apollo-composable`的useResult方法
+             */
+            useResult?: VueType.FuncUseResult,
+        } :
+        {
+            /**
+             * 传入`@apollo/client`的useQuery方法
+             */
+            useQuery?: ReactType.FuncUseQuery,
+            /**
+             * 传入`@apollo/client`的useMutation方法
+             */
+            useMutation?: ReactType.FuncUseMutation,
+            useResult?: ReactType.FuncUseResult,
+        }) &
+    {
+        /**
+         * 递归生成关联字段的深度,默认3
+         */
+        deep?: number,
+        /**
+         * 架构类型 vue | react 默认vue
+         */
+        type?: Type,
+        /**
+         * 客户端
+         */
+        client?: BaseApolloClient<any> | ApolloClient<any>
+    };
+
+export type TableMethod<T extends FieldMetadataMap, TOptions, TReturn> = (config?: TOptions) => TReturn
+export type QueryTableOptions<T extends FieldMetadataMap> = PickConfig<T>
+export type QueryAggregateOptions<T extends FieldMetadataMap> = { field: '_all' | keyof T, fn: AggregateFunctionMenu }
+
+export type TableBaseMethods<T extends FieldMetadataMap, TOptions> = {
+    /**
+     * 返回graphql的字符串文本
+     */
+    text: TableMethod<T, TOptions, string>,
+    /**
+     * 返回gql``包装后的对象
+     */
+    gql: TableMethod<T, TOptions, DocumentNode>
+}
+
+
+export type TableQueryMethods<T extends FieldMetadataMap, TOptions, TVariables, TData, Type extends TypeOptions> =
+    TableBaseMethods<T, TOptions>
+    & {
+    /**
+     * 执行query方法
+     * @param options
+     */
+    query<T = TData>(options?: Omit<QueryOptions<TVariables>, "query"> & TOptions): Promise<ApolloQueryResult<T>>,
+    /**
+     * 从缓存中读取数据
+     * @param options
+     */
+    readQuery<T = TData>(options?: { variables?: TVariables } & TOptions): T | null,
+    /**
+     * 写入缓存
+     * @param options
+     */
+    writeQuery<T = TData>(options?: { variables?: TVariables, data: T } & TOptions): void;
+    /**
+     * 执行查询的hook方法
+     * @param options
+     */
+    useQuery<T = TData>
+    (options?: (Type extends VueType.TypeName ? VueType.QueryOptions<T, TVariables> : ReactType.QueryOptions<T, TVariables>) & TOptions): (Type extends VueType.TypeName ?
+        VueType.QueryReturn<T, TVariables> :
+        ReactType.QueryReturn<T, TVariables>) & { data: T | null };
+}
+
+export type OneType<T> = {
+    [key in keyof T]?: any;
+} & {
+    [key: string]: any
+}
+
+export type PageType<T> = {
+    /**
+     * 总量
+     */
+    total: number,
+    /**
+     * 列表数据
+     */
+    list: T[]
+}
+
+
+export type TableMutationMethods<T extends FieldMetadataMap, TOptions, TVariables, TData, Type extends TypeOptions> =
+    TableBaseMethods<T, TOptions>
+    & {
+    /**
+     * 执行副作用的方法
+     * @param options
+     */
+    mutate<T = any>(options?: Omit<MutationOptions<TVariables>, "mutation"> & TOptions & { variables: TVariables }): Promise<FetchResult<T>>,
+    /**
+     * 执行副作用的hook方法
+     * @param options
+     */
+    useMutation<T = TData>
+    (options?: (
+        Type extends VueType.TypeName ?
+            VueType.MutationOptions<T, TVariables> :
+            ReactType.MutationOptions<T, TVariables>
+        ) & TOptions):
+        Type extends VueType.TypeName ?
+            VueType.MutateReturn<T, TVariables> :
+            ReactType.MutationReturn<T, TVariables>
+}
+
+export type QueryOneVariables<T extends FieldMetadataMap> = {
+    /**
+     *  where查询参数 具体看sequelize 文档 所有Op值都用_替代,如[Op.or]->_or
+     */
+    where?: WhereOptions<T>,
+    /**
+     * 范围/作用域
+     */
+    scope?: string[]
+}
+/**
+ * 单表查询列表参数
+ */
+export type QueryListVariables<T extends FieldMetadataMap> = QueryOneVariables<T> &
+    {
+        /**
+         * 限制数量
+         */
+        limit?: number,
+        /**
+         * 偏移量
+         */
+        offset?: number,
+        /**
+         * 使用子查询
+         */
+        subQuery?: boolean,
+        /**
+         * 排序参数
+         */
+        order?: { name: keyof T, sort?: 'asc' | 'desc' }[]
+    }
+/**
+ * 单表输入参数
+ */
+export type MutationInputVariables<T extends FieldMetadataMap> = {
+    data: {
+        [name in keyof T]?: any
+    }
+}
+
+/**
+ * 单表更新参数
+ */
+export type MutationUpdateVariables<T extends FieldMetadataMap> = MutationInputVariables<T> & {
+    /**
+     * 主键值
+     */
+    id: string | number
+}
+/**
+ * 所有访问单表数据的方法
+ */
+type TableMethods<T extends TableMetadataMap, key extends keyof T, Type extends TypeOptions = 'vue'> = {
+    /**
+     * 获取单条数据
+     */
+    readonly one: TableQueryMethods<T[key]['fields'], QueryTableOptions<T[key]['fields']>, QueryOneVariables<T[key]['fields']>, OneType<T[key]['fields']>, Type>,
+    /**
+     * 获取列表数据
+     */
+    readonly list: TableQueryMethods<T[key]['fields'], QueryTableOptions<T[key]['fields']>, QueryListVariables<T[key]['fields']>, OneType<T[key]['fields']>[], Type>,
+    /**
+     * 获取分页数据
+     */
+    readonly listPage: TableQueryMethods<T[key]['fields'], QueryTableOptions<T[key]['fields']>, QueryListVariables<T[key]['fields']>, PageType<OneType<T[key]['fields']>>, Type>,
+    /**
+     * 获取聚合数据
+     */
+    readonly aggregate: TableQueryMethods<T[key]['fields'], QueryAggregateOptions<T[key]['fields']>, { where?: WhereOptions<T[key]['fields']> }, number, Type>,
+    /**
+     * 新建方法
+     */
+    readonly create?: TableMutationMethods<T[key]['fields'], Omit<PickConfig<T[key]['fields']>, 'deep'>, MutationInputVariables<T[key]['fields']>, OneType<T[key]['fields']>, Type>,
+    /**
+     * 更新方法
+     */
+    readonly update?: TableMutationMethods<T[key]['fields'], Omit<PickConfig<T[key]['fields']>, 'deep'>, MutationUpdateVariables<T[key]['fields']>, OneType<T[key]['fields']>, Type>,
+    /**
+     * 删除方法
+     */
+    readonly remove?: TableMutationMethods<T[key]['fields'], {}, { id: string | number }, boolean, Type>,
+};
+/**
+ * 所有访问单表数据的方法
+ */
+export type TableMethodsMap<T extends TableMetadataMap, Type extends TypeOptions = 'vue'> = {
+    [key in keyof T]: TableMethods<T, key, Type>
+}
+
+/**
+ * 默认useResult方法
+ * @param data
+ * @param defaultValue
+ * @param pick
+ * @returns {any}
+ */
 function defaultUseResult(data: any, defaultValue: any, pick: (data: any) => any): any {
     return data === null || data === undefined ? data : pick(data)
 }
 
-function getResult(key: string, type: string) {
+/**
+ * 获取有效的结果
+ * @param tableName
+ * @param action
+ * @returns {(data: any) => (any)}
+ */
+function getResult(tableName: string, action: string) {
     return (data: any) => {
-        if (type === 'listPage') {
-            return get(data, key)
+        if (action === 'listPage') {
+            return get(data, tableName)
         }
-        return get(data, `${key}.${type}`)
+        return get(data, `${tableName}.${action}`)
     }
+}
+
+/**
+ * 获取处理结果的方法
+ * @param tableName
+ * @param action
+ * @returns {(res: FetchResult) => {extensions?: Record<string, any>; data: any; context?: Record<string, any>; errors?: ReadonlyArray<GraphQLError>}}
+ */
+function getHandleFetchResult(tableName: string, action: string) {
+    return (res: FetchResult) => ({
+        ...res,
+        data: getResult(tableName as string, action)(res.data)
+    })
 }
 
 /**
  * 自动生成查询方法
  * @param metadata
- * @returns {TableGqlFields<T>}
+ * @returns {TableMethodsMap<T>}
  * @param apiConfig
  */
-export function createGqlApi<T extends TableMetadataMap, Type extends TypeOptions = 'vue'>(
-    metadata: T, apiConfig: GqlApiConfig<T, Type> = {} as GqlApiConfig<T, Type>): TableGqlFields<T, Type> {
+export function createApiClient<T extends TableMetadataMap, Type extends TypeOptions = 'vue'>(
+    metadata: T, apiConfig: ApiConfig<T, Type> = {} as ApiConfig<T, Type>): TableMethodsMap<T, Type> {
 
     apiConfig = {
         deep: 3,
@@ -78,7 +331,7 @@ export function createGqlApi<T extends TableMetadataMap, Type extends TypeOption
     }
 
     function getQueryFunc<F extends FieldMetadataMap>(params: Omit<QueryTableParams, 'fields'> | QueryAggregateParams):
-        GqlMethod<F, QueryTableOptions<F>, string> {
+        TableMethod<F, QueryTableOptions<F>, string> {
         return ({only, deep = 1, exclude} = {}) => {
             // @ts-ignore
             const fields = getFields(params.name as keyof T, {deep, only, exclude});
@@ -90,45 +343,46 @@ export function createGqlApi<T extends TableMetadataMap, Type extends TypeOption
     }
 
 
-    function getGqlMethods<TOptions>(getText: GqlMethod<FieldMetadataMap, TOptions, string>) {
+    function getGqlMethods<TOptions>(getText: TableMethod<FieldMetadataMap, TOptions, string>) {
         return {
             text: getText,
             gql: (options: TOptions) => gql(`${getText(options)}`)
         }
     }
 
-    function getGqlQueryMethods<TOptions, TVariables>(getText: GqlMethod<FieldMetadataMap, TOptions, string>, key: keyof T, type: string) {
+    function getGqlQueryMethods<TOptions, TVariables>(getText: TableMethod<FieldMetadataMap, TOptions, string>, tableName: keyof T, action: string) {
 
         return {
             ...getGqlMethods(getText),
             query(options = {}) {
-                if (!apiConfig.client) throw new Error('尚未配置client');
-                return apiConfig.client.query({query: gql`${getText(options as TOptions)}`, ...options})
-                    .then(res => ({...res, data: getResult(key as string, type)(res.data)}))
+                assertClient(apiConfig.client);
+                return (apiConfig.client as BaseApolloClient<any>).query({query: gql`${getText(options as TOptions)}`, ...options})
+                    .then(getHandleFetchResult(tableName as string, action))
             },
             readQuery(options = {}) {
-                if (!apiConfig.client) throw new Error('尚未配置client');
-                return apiConfig.client.readQuery({query: gql`${getText(options as TOptions)}`, ...options})
-                    .then((res: any) => getResult(key as string, type)(res))
+                assertClient(apiConfig.client);
+                return (apiConfig.client as BaseApolloClient<any>).readQuery({query: gql`${getText(options as TOptions)}`, ...options})
+                    .then(getHandleFetchResult(tableName as string, action))
             },
             writeQuery<TData>(options: { variables?: TVariables, data: TData } & TOptions) {
-                if (!apiConfig.client) throw new Error('尚未配置client');
-                apiConfig.client.writeQuery({query: gql`${getText(options as TOptions)}`, ...options})
+                assertClient(apiConfig.client);
+                (apiConfig.client as BaseApolloClient<any>).writeQuery({query: gql`${getText(options as TOptions)}`, ...options})
             },
             useQuery(options = {}) {
-                if (!apiConfig.useVueQuery && !apiConfig.useReactQuery) throw new Error('尚未传入useQuery方法')
-                if (apiConfig.useVueQuery) {
+                const {useQuery, useResult, type} = apiConfig;
+                assertUseQuery(useQuery)
+                if (type === 'vue') {
                     // @ts-ignore
-                    const {result, ...other} = apiConfig.useVueQuery(gql`${getText(options as TOptions)}`, options.variables, options);
-                    const data = apiConfig.useResult(result, null, getResult(key as string, type))
+                    const {result, ...other} = (useQuery as VueType.FuncUseQuery)(gql`${getText(options as TOptions)}`, options.variables, options);
+                    const data = useResult(result, null, getResult(tableName as string, action))
                     return {
                         result,
                         ...other,
                         data
                     }
-                } else if (apiConfig.useReactQuery) {
-                    const {data, ...other} = apiConfig.useReactQuery(gql`${getText(options as TOptions)}`, options);
-                    const handleData = apiConfig.useResult(data, null, getResult(key as string, type))
+                } else {
+                    const {data, ...other} = (useQuery as ReactType.FuncUseQuery)(gql`${getText(options as TOptions)}`, options);
+                    const handleData = useResult(data, null, getResult(tableName as string, action))
                     return {
                         ...other,
                         data: handleData
@@ -139,73 +393,81 @@ export function createGqlApi<T extends TableMetadataMap, Type extends TypeOption
         }
     }
 
-    function getGqlMutationMethods<TOptions, TVariables>(getText: GqlMethod<FieldMetadataMap, TOptions, string>, key: keyof T, type: string) {
-        const {} = apiConfig
+    function getGqlMutationMethods<TOptions, TVariables, TData>(getText: TableMethod<FieldMetadataMap, TOptions, any>, tableName: keyof T, action: string) {
         return {
             ...getGqlMethods(getText),
             mutate<T>(options = {}) {
-                if (!apiConfig.client) throw new Error('尚未配置client');
-                return apiConfig.client.mutate<T, TVariables>({mutation: gql(`${getText(options as TOptions)}`), ...options})
+                assertClient(apiConfig.client);
+                return (apiConfig.client as BaseApolloClient<any>).mutate<T, TVariables>({mutation: gql(`${getText(options as TOptions)}`), ...options})
             },
-            useMutation(options = {}) {
-                if (!apiConfig.useVueMutation && !apiConfig.useReactMutation) throw new Error('尚未传入useMutation方法')
-                if (apiConfig.useVueMutation) {
-                    return apiConfig.useVueMutation(gql`${getText(options as TOptions)}`, options)
-                } else if (apiConfig.useReactMutation) {
-                    return apiConfig.useReactMutation(gql`${getText(options as TOptions)}`, options)
+            useMutation<T>(options = {}) {
+                const {useMutation, type} = apiConfig
+                assertUseMutation(useMutation)
+                if (type === 'vue') {
+                    const {mutate, onDone, ...other} = (useMutation as VueType.FuncUseMutation)(gql`${getText(options as TOptions)}`, options);
+                    return {
+                        ...other,
+                        mutate: (variables: TVariables, overrideOptions?: any) => mutate(variables, overrideOptions).then(getHandleFetchResult(tableName as string, action)),
+                        onDone: (fn: (param?: FetchResult<any>) => void) => onDone((params) => {
+                            fn(getHandleFetchResult(tableName as string, action)(params))
+                        })
+                    }
+                } else {
+                    if ((options as ReactType.MutationOptions<TData, TVariables>).onCompleted) {
+                        const _onCompleted = (options as ReactType.MutationOptions<TData, TVariables>).onCompleted;
+                        (options as ReactType.MutationOptions<TData, TVariables>).onCompleted = (res) => {
+                            _onCompleted(getResult(tableName as string, action)(res))
+                        }
+                    }
+                    const [mutate, result] = (useMutation as ReactType.FuncUseMutation)(gql`${getText(options as TOptions)}`, options);
+                    return [(options: MutationFunctionOptions<TData, TVariables>) => mutate(options).then(getHandleFetchResult(tableName as string, action)), getHandleFetchResult(tableName as string, action)(result)]
                 }
-
             }
         }
     }
 
-    return Object.keys(metadata).reduce<TableGqlFields<T>>((memo, key: keyof T) => {
-        const {createAble, editable, pkName, removeAble} = metadata[key]
+    return Object.keys(metadata).reduce<TableMethodsMap<T, Type>>((memo, tableName: keyof T) => {
+        const {createAble, editable, pkName, removeAble} = metadata[tableName]
         // @ts-ignore
-        memo[key] = {
-            one: getGqlQueryMethods(getQueryFunc({name: key as string, isList: false, withCount: false}), key, 'one'),
-            list: getGqlQueryMethods(getQueryFunc({name: key as string, isList: true, withCount: false}), key, 'list'),
+        memo[tableName] = {
+            one: getGqlQueryMethods(getQueryFunc({
+                name: tableName as string,
+                isList: false,
+                withCount: false
+            }), tableName, 'one'),
+            list: getGqlQueryMethods(getQueryFunc({
+                name: tableName as string,
+                isList: true,
+                withCount: false
+            }), tableName, 'list'),
             listPage: getGqlQueryMethods(getQueryFunc({
-                name: key as string,
+                name: tableName as string,
                 isList: true,
                 withCount: true
-            }), key, 'listPage'),
+            }), tableName, 'listPage'),
             aggregate: getGqlQueryMethods(({fn, field}) => {
                 return queryAggregate({
                     fn,
                     name,
                     field: field as string
                 })
-            }, key, 'aggregate'),
+            }, tableName, 'aggregate'),
             create: createAble ? getGqlMutationMethods((options = {}) => mutateCreate({
-                name: key as string,
-                fields: getFields(key, {deep: 1, ...options})
-            }), key, 'create') : undefined,
+                name: tableName as string,
+                fields: getFields(tableName, {deep: 1, ...options})
+            }), tableName, 'create') : undefined,
             update: editable ? getGqlMutationMethods((options = {}) => mutateUpdate({
-                name: key as string,
+                name: tableName as string,
                 pkName,
-                fields: getFields(key, {deep: 1, ...options})
-            }), key, 'update') : undefined,
+                fields: getFields(tableName, {deep: 1, ...options})
+            }), tableName, 'update') : undefined,
             remove: removeAble ? getGqlMutationMethods(() => mutateRemove({
-                name: key as string,
+                name: tableName as string,
                 pkName,
-            }), key, 'remove') : undefined,
+            }), tableName, 'remove') : undefined,
         }
         return memo;
-    }, {} as TableGqlFields<T, Type>)
+    }, {} as TableMethodsMap<T, Type>)
 }
 
 
-// const api = createGqlApi({
-//     user: {
-//         type: 'User',
-//         name: 'user',
-//         fields: {name1111: {type: "id"}, tasks: {type: 'Task'}, id: {type: 'obj'}}
-//     },
-//     task: {
-//         type: 'Task',
-//         name: 'task',
-//         fields: {title: {type: "id"}}
-//     }
-// }, {})
-// api.user.create.useMutation({variables: {data: {name1111: "sas"}}}).mutate()

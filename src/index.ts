@@ -1,3 +1,3 @@
 export * from './generateText'
 export * from './adapterUtils'
-export * from './createGqlApi'
+export * from './createApiClient'

@@ -17,7 +17,7 @@ import {
     MutateRemoveParams,
     TableMetadata,
     TableFieldsMap,
-    FieldMetadata, PickConfig, FlattenConfig
+    FieldMetadata, PickConfig, FlattenConfig, TableMetadataMap, TableMetadataWithMapFields
 } from './type'
 
 
@@ -100,46 +100,21 @@ export function mutateRemove<T extends FieldMetadataMap>(config: MutateRemovePar
 }`
 }
 
-
 /**
  * 生成type和字段的映射关系
  * @param list
  * @returns {TableFieldsMap}
  * @param key
  */
-export function tableList2Map(list: TableMetadata[], key: 'type' | 'name' = 'type'): TableFieldsMap {
-    return list.reduce<TableFieldsMap>((memo, tableItem) => {
-        memo[tableItem[key]] = tableItem.fields.reduce<FieldMetadataMap>((fields, fieldItem) => {
-            const {name, ...other} = fieldItem;
-            fields[name] = {
-                ...other
-            };
-            return fields;
-        }, {})
-        return memo
-    }, {})
-}
-
-/**
- * 生成type和name的映射关系
- * @param list
- * @returns {{[p: string]: string}}
- */
-export function tableList2TypeNameMap(list: TableMetadata[]): { [type: string]: string } {
-    return list.reduce<{ [type: string]: string }>((memo, item) => {
-        memo[item.type] = item.name;
-        return memo
-    }, {})
-}
-
-/**
- * 生成name和type的映射关系
- * @param list
- * @returns {{[p: string]: string}}
- */
-export function tableList2NameTypeMap(list: TableMetadata[]): { [type: string]: string } {
-    return list.reduce<{ [type: string]: string }>((memo, item) => {
-        memo[item.name] = item.type;
+export function tableList2Map(list: TableMetadata[], key: 'type' | 'name' = 'type'): TableMetadataMap {
+    return list.reduce<TableMetadataMap>((memo, tableItem) => {
+        memo[tableItem[key]] = {
+            ...tableItem,
+            fields: tableItem.fields.reduce<FieldMetadataMap>((fields, field) => {
+                fields[field.name as string] = field;
+                return fields;
+            }, {})
+        }
         return memo
     }, {})
 }

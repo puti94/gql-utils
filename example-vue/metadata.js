@@ -5,9 +5,13 @@
 export default {
   "Account": {
     type: "Account",
+    createAble: true,
+    editable: true,
+    removeAble: true,
+    pkName: 'uuid',
     fields: {
       "uuid": {
-        "type": "String",
+        "type": "ID",
         "dataType": "UUID",
         "isPk": true,
         "isList": false,
@@ -99,6 +103,9 @@ export default {
   },
   "Project": {
     type: "Project",
+    createAble: true,
+    editable: true,
+    removeAble: true,
     fields: {
       "id": {
         "type": "Int",
@@ -179,6 +186,9 @@ export default {
   },
   "Task": {
     type: "Task",
+    createAble: true,
+    editable: true,
+    removeAble: true,
     fields: {
       "id": {
         "type": "Int",
@@ -237,6 +247,9 @@ export default {
   },
   "User": {
     type: "User",
+    createAble: true,
+    editable: true,
+    removeAble: true,
     fields: {
       "name": {
         "type": "String",
